@@ -1,2 +1,4 @@
 # query.gg
-The React Query.GG Course
+Aprendiendo React Query con: The official React Query course.
+
+https://query.gg
