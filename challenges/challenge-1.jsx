@@ -30,3 +30,11 @@ function Book() {
     </div>
   );
 }
+
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <Book />
+    </QueryClientProvider>
+  )
+}
