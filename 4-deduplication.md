@@ -184,7 +184,7 @@ Notice that the custom hook code above still works exactly the same in TypeScrip
 Show More
 We can see in this TypeScript playground that the return type of our custom hook is inferred as UseQueryResult<number, Error>. This means our data property will be of type number | undefined - number because that's what our queryFn returns, and undefined because it might not exist in the cache while we fetch it.
 
-If you absolutely must provide a type annotation (e.g. because a lint rule enforces it or your Tech Lead insists), UseQueryResult<number> works well, but you'll lose that type inference from the queryFn. The type UseQueryResult can be imported from @tantack/react-query, as this TypeScript playground shows."
+If you absolutely must provide a type annotation (e.g. because a lint rule enforces it or your Tech Lead insists), UseQueryResult<number> works well, but you'll lose that type inference from the queryFn. The type UseQueryResult can be imported from @tantack/react-query, as this TypeScript playground shows"
 
 https://www.typescriptlang.org/docs/handbook/type-inference.html
 https://www.typescriptlang.org/play?#code/JYWwDg9gTgLgBAbzgVwM4FMCKz1QJ5wC+cAZlBCHAOQACMAhgHaoMDGA1gPRTr2swBaAI458VALAAoKSWSN+wCIxQYAMsg54AcshAAjXAAoAlIimdOcK9bgA9APxSrPGMijK0WUXkMIn1kVw8AGl0PAAuOABtKgAbDXZtXQMoKgBdABp-K0D8ADFGSJM4AF4APjNJG2d0V3c4AAVyEGAMADoeVAhYgDd0QwBZehgACw6mABMKE2Nson9CWclCIA
