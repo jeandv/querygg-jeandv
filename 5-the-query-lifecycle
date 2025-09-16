@@ -117,7 +117,8 @@ function MediaDevices() {
 }
 
 
-Cuál elijas depende de ti, solo asegúrate de ser apasionadamente dogmático al respecto cuando lo discutas con tus colegas.
+Cuál elijas depende de ti, solo asegúrate de ser apasionadamente dogmático al respecto cuando lo discutas con tus colegas
+
 
 "For TypeScript Users
 The object returned from useQuery is a Discriminated Union Type, and it's both discriminated by the status field and the derived boolean flags.
