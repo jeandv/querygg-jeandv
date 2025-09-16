@@ -1,0 +1,131 @@
+
+Uno de los mejores aspectos de React Query es que hace que escribir lógica asíncrona parezca como si fuera síncrona. Pero, con la excepción de nuestra aplicación Pokémon, aún no hemos hecho nada verdaderamente asíncrono. Es hora de cambiar eso.
+
+
+Supongamos que, utilizando la API MediaDevices del navegador, queremos mostrar al usuario una lista de sus
+dispositivos de entrada y salida multimedia
+disponibles actualmente.
+
+
+Sabiendo lo que sabes sobre React Query, ¿cómo lo harías?
+
+
+Lo más probable es que hicieras algo como esto:
+
+
+function MediaDevices() {
+  const { data } = useQuery({
+    queryKey: ['mediaDevices'],
+    queryFn: () => {
+      return navigator.mediaDevices.enumerateDevices()
+    }
+  })
+
+  return (
+    <ul>
+      {data.map((device) => (
+        <li key={device.deviceId}>{device.label}</li>
+      ))}
+    </ul>
+  )
+}
+
+
+
+Como enumerateDevices devuelve una promesa, podemos devolverla desde nuestra queryFn y React Query se encargará del resto por nosotros.
+
+
+Por desgracia, hay un error importante en nuestro código. ¿Puedes detectarlo?
+
+
+Sí, React Query nos permite tratar el código asíncrono como si fuera síncrono, pero eso no cambia el hecho de que sigue siendo asíncrono. Y eso significa que habrá un momento en el que nuestros datos aún no estarán disponibles para nosotros.
+
+
+Si ejecutáramos este código, obtendríamos este error:
+
+
+Cannot read properties of undefined (reading 'map')
+
+
+Estamos intentando acceder a map en data, pero hasta que la petición asíncrona se haya resuelto, data será undefined.
+
+Por supuesto, siempre podríamos usar un condicional para verificar si data es undefined antes de acceder a map, pero React Query viene con una opción aún mejor: exponer sus estados de consulta internos (Query States) para que sepas en qué status se encuentra la consulta actualmente:
+
+pending - La consulta aún no se ha completado, por lo que todavía no tienes data.
+
+success - La consulta ha finalizado con éxito y data está disponible.
+
+error - La consulta ha fallado y tienes un error.
+
+Esos estados se corresponden directamente con el estado en el que puede estar una promesa: pending, fulfilled o rejected, lo que esperamos que tenga sentido, ya que React Query se basa completamente en promesas.
+
+Tienes dos opciones para acceder al status de la consulta. La primera, naturalmente, es a través de la propiedad status que useQuery devuelve.
+
+
+function MediaDevices() {
+  const { data, status } = useQuery({
+    queryKey: ['mediaDevices'],
+    queryFn: () => {
+      return navigator.mediaDevices.enumerateDevices()
+    }
+  })
+
+  if (status === 'pending') {
+    return <div>...</div>
+  }
+
+  if (status === 'error') {
+    return <div>We were unable to access your media devices</div>
+  }
+
+  return (
+    <ul>
+      {data.map((device) => (
+        <li key={device.deviceId}>{device.label}</li>
+      ))}
+    </ul>
+  )
+}
+
+
+La segunda, si prefieres un poco más de sabor, es a través de las banderas booleanas derivadas, isPending, isSuccess e isError, que también están disponibles en el objeto devuelto por useQuery.
+
+
+function MediaDevices() {
+  const { data, isPending, isError } = useQuery({
+    queryKey: ['mediaDevices'],
+    queryFn: () => {
+      return navigator.mediaDevices.enumerateDevices()
+    }
+  })
+
+  if (isPending === true) {
+    return <div>...</div>
+  }
+
+  if (isError === true) {
+    return <div>We were unable to access your media devices</div>
+  }
+
+  return (
+    <ul>
+      {data.map((device) => (
+        <li key={device.deviceId}>{device.label}</li>
+      ))}
+    </ul>
+  )
+}
+
+
+Cuál elijas depende de ti, solo asegúrate de ser apasionadamente dogmático al respecto cuando lo discutas con tus colegas.
+
+"For TypeScript Users
+The object returned from useQuery is a Discriminated Union Type, and it's both discriminated by the status field and the derived boolean flags.
+
+Show More
+You can see in this TypeScript playground that data will be of type MediaDeviceInfo[] | undefined, but the type will automatically be narrowed to MediaDeviceInfo[] after we've eliminated the states where data could be potentially undefined: pending and error.
+
+Because what remains is the success state, TypeScript knows that data is now definitely defined, so undefined can be removed from the union."
+
+https://www.typescriptlang.org/docs/handbook/typescript-in-5-minutes-func.html#discriminated-unions
+https://www.typescriptlang.org/play/?&code/JYWwDg9gTgLgBAKjgQwM5wEoFNkGN4BmUEIcARFDvmQLABQokscA3nAIoCuWUAngMIAbYFgB2MADQdufISPEAFYgDdgAEx5TOqLFx684AXzhEScAOQABGMlGobuANYB6SnhgBaAI4ze5%20vS4EHbwPvpyYvAAvHCiWADu0uHCkQAUAJQBdFgAHkzwGgTInIKEnKL4wMFwAIJgYBms9HBwlDCcUKJwqc0tcAA8erIpiirqPHC4IzBRLGHD8jCGAHy9fQMAslhqwMgAIliquFjozqt06-3OQwLTShCqGlDnLZl0hllBIXCoglhYYDgMVSIFQAC5YpwQAAjHjpIHLWIJOD3EDAHSpVKUVAQQTKLDwqKInQwAAqoCwEE4MCxJ1x%20KkoPSb3oBHKlWq2iwWx2%200OwGOqEaLF6bQ6XS5N1SIoufXmvAA0lheBCANrmEDbXYHI4ncwAXQkazg8oAYqIIWheBVuoTETL1i1kPFkMB4L9-g0AKwABh9b0drSw7U6sWQqgA5sgYNAAHSa3k6gUnWNiKE8aNYJOCjLGj6ywxvfOs9kwKpdHna-k5%20EOybBeysOBqaPIKT2aPaIxAuBcyt83VCgNwZzOQMAPQA-FkWsACN0O%2010FEVxZBBBkDtRBHzLXjWLQ-0dsplrGz1djy8jL05wubEugavzDxiFBd01ZS0D10j8ATwB1LBJlscx4DwQV0F4KkoDgBNdmbasTgvP8r2LWVv26Y1fxPABNKk4AAC3DIC2BbGxYz%20bcYAI7s4OQBDB2Qk9jVHQM2LgKdeiLIA=#code/JYWwDg9gTgLgBAKjgQwM5wEoFNkGN4BmUEIcARFDvmQLABQokscA3nAIoCuWUAngMIAbYFgB2MADQdufISPEAFYgDdgAEx5TOqLFx684AXzhEScAOQABGMlGobuANYB6SnhgBaAI4ze5+vS4EHbwPvpyYvAAvHCiWADu0uHCkQAUAJQBdAScovjAwXDaWACyWGrAyAAiWKq4WKgZrPRwcJQwnFCiRTp6fKksLa1wYXwA0li8AFxwANrmIOWVNXUN5gC6EkOto7wAYqIzaLx5cE1RAHzNdMPDyPHIwPCoglhYYKkArAAM35k3tzaWA6XViyFUAHNkDBoAA6RYVaq1YD1VCwsScRZQaFYFYohoZbZGIaGf6GLI5PIwArdMqIvGopqDAFBEKsOBqaHIKT2aHaIxwGLFOnLZGM-6tZzOQFwAB6AH4sq1gAQzryOugolqLGAxBVRBDzOlrrd2p1ugAeCrKC6wu0W5zWi4koYqtU2DWC7XmHjEKBGk3DM2gq3AG0AdSwcFwtnM8DwqPQvAgnTgCMqHLFDQdTpddCGwe6qSJoZtAE0U3AABbgqNsTk2WGvA0wKsC9PITOrVA5sPOgGS6Uy4cKoZkrJYAAeTHgGgIyE4gkIuXyhQAgmAPsbma1C2cS30BClFCp1Dxo8eYFEWLsIuJDP2ZRaRUju3BnI-hg7D3eYEoIKoGhQJ+475tkK7UoULxvGAZwgKgMyiJiABGPDbgWwLmrECRwP+IDADoqSpJQqAQIIyhYMalxwDoMAACqgFgKYwMRDRkRRUjwekZJAA
