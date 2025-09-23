@@ -1,5 +1,7 @@
 // En este desafío, tu tarea es crear un componente de búsqueda que obtenga datos de una API a demanda. Dado que no queremos hacer una petición cada vez que el usuario escribe un carácter, necesitaremos desacelerar (debounce) la consulta. Incluimos el hook useDebounce de @uidotdev/usehooks. Puedes leer más sobre él aquí. También creamos una función de utilidad getData para obtener los datos basándose en el término de búsqueda.
 
+// https://usehooks.com/usedebounce
+
 // Usando una combinación de estas herramientas, crea un componente <BookSearch /> que renderice una lista de libros basándose en el término de búsqueda del usuario. Si no hay resultados, muestra un componente <NoResults />. Para completar la experiencia, si la consulta aún se está ejecutando, muestra un componente <Loader />.
 
 // Tareas
@@ -36,7 +38,7 @@ import { getData } from "./utils";
 import ResultList from "./ResultList";
 
 function useBookSearch(searchTerm) {
-  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+  const debouncedSearchTerm = useDebounce(searchTerm, 300); // useDebounce lo que hace es: Desacelerar el término de búsqueda para evitar peticiones excesivas https://usehooks.com/usedebounce
 
   return useQuery({
     queryKey: ["books", debouncedSearchTerm],
