@@ -38,7 +38,7 @@ function useBookDetails(bookId) {
         enabled: !!bookId,
       },
     ],
-  });
+  })
 
   const bookResult = results[0];
   const reviewsResult = results[1];
