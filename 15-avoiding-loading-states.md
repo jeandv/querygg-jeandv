@@ -161,3 +161,40 @@ Específicamente para nuestra aplicación, lo que necesitamos es algún tipo de 
 Para hacer esto, ¿qué pasaría si "Usamos la Plataforma™" y escuchamos el evento onMouseEnter en la etiqueta de anclaje (anchor tag) que enlaza a una publicación? Es una suposición bastante segura que, cuando un usuario pasa el ratón sobre un enlace, probablemente hará clic en él.
 
 Así es como se vería con React Query.
+
+
+<a
+  onClick={() => setPath(post.path)}
+  href="#"
+  onMouseEnter={() => {
+    queryClient.prefetchQuery({
+      queryKey: ['posts', post.path],
+      queryFn: () => fetchPost(post.path),
+      staleTime: 5000
+    })
+  }}
+>
+  {post.title}
+</a>
+
+
+El API queryClient.prefetchQuery es la herramienta de React Query para desencadenar una precarga de forma imperativa. Ejecutará la función de consulta (queryFn) y almacenará el resultado en la caché bajo la clave de consulta (queryKey) proporcionada.
+
+Dado que el único objetivo del API de precarga es obtener datos dentro de la caché, no devuelve ningún dato (solo una Promise vacía que puedes esperar con await si lo necesitas).
+
+La pregunta más importante que probablemente tienes con este código es de dónde viene queryClient.
+
+Este es el mismo objeto queryClient que inicializaste en la raíz de tu aplicación y que pasaste a QueryClientProvider. Puedes acceder a él mediante el hook de React Query useQueryClient.
+
+
+import{ useQueryClient } from '@tanstack/react-query'
+
+...
+
+const queryClient = useQueryClient()
+
+
+Final Response
+No desestructures el queryClient
+
+Es importante notar que no puedes desestructurar propiedades del QueryClient.
