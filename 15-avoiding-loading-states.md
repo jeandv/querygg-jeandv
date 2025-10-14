@@ -198,3 +198,45 @@ Final Response
 No desestructures el queryClient
 
 Es importante notar que no puedes desestructurar propiedades del QueryClient.
+
+const { prefetchQuery } = useQueryClient() // ❌
+
+La razón de esto es que el QueryClient es una clase, y las clases no pueden ser desestructuradas en JavaScript sin perder la referencia a su enlace this.
+
+Esto no es algo específico de React Query; tendrás el mismo problema al hacer algo como:
+
+const { getTime } = new Date()
+
+
+Puede que hayas notado que el objeto que pasamos a prefetchQuery tiene la misma forma (queryKey, queryFn, staleTime) que un objeto que pasaríamos a useQuery.
+
+Debido a esto, no es una mala idea abstraer este objeto en una función creadora (maker function) que puedas invocar cada vez que necesites las opciones de consulta. De esta manera, puedes usar fácilmente las mismas opciones tanto para useQuery como para prefetchQuery.
+
+
+function getPostQueryOptions(path) {
+  return {
+    queryKey: ['posts', path],
+    queryFn: () => fetchPost(path),
+    staleTime: 5000
+  }
+}
+
+...
+
+function usePost(path) {
+  return useQuery(getPostQueryOptions(path))
+}
+
+...
+
+<a
+  onClick={() => setPath(post.path)}
+  href="#"
+  onMouseEnter={() => {
+    queryClient.prefetchQuery(getPostQueryOptions(post.path))
+  }}
+>
+  {post.title}
+</a>
+
+
