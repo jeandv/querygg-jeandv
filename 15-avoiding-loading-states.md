@@ -451,3 +451,27 @@ function usePost(path) {
 }
 
 
+Para los usuarios de TypeScript
+
+Por defecto, queryClient.getQueryData devolverá unknown, ya que React Query no puede saber qué tipo de dato reside bajo cada queryKey. Las definiciones de las consultas se hacen ad hoc (cuando llamas a useQuery por primera vez) y no de antemano (por ejemplo, a través de un esquema).
+
+Sin embargo, si pasas una queryKey que fue creada mediante la función queryOptions, puedes recuperar esa seguridad de tipos, ya que esa clave está ligada a la queryFn, la cual está tipada correctamente:
+
+
+import { queryOptions } from '@tanstack/react-query'
+
+const postQueryOptions = queryOptions({
+  queryKey: ['posts'],
+  queryFn: fetchPosts,
+  staleTime: 5000
+})
+
+// Los datos devueltos por getQueryData ahora están tipados.
+const data = queryClient.getQueryData(
+  postQueryOptions.queryKey
+)
+
+
+Échale un vistazo a este TypeScript playground: data ahora estará tipado como lo que devuelva la función fetchPosts. https://www.typescriptlang.org/play?#code/JYWwDg9gTgLgBAbzgRwK4FMoE8DyYbAQB2AzgDRwCKG2AwgDbDpHwC+cAZlBCHAOQABGAENSIgMYBrAPRR0w8TAC0aTFj4BYAFDbxxEvFV1GzeAF44RdAHcqNLAyYsAFAEpt2mFjDo4ABQgDOAskYAATAC44AyhgIgBzAG44MGEYAAsomLikuAIYenQsmFiEuFYPLTD0cXphOU5UIkVCIk50GHF0gIMSNyi-bhBgEnQAHgBBKChhLDGemAA+Rcq9MRTAmBI8An1glHsd1r6EbTgDtQBpdCwogG0+SF6+AF0yM4vsADEiKI4OroLcjaVjuHRaNZBMJpYT7IwOEwsAB08Q61DUABEYc4Pk8tkd9Ej4dcsNowdpoSJtNJpHAAHoAfiAA
+
+
