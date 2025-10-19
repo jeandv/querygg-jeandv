@@ -240,3 +240,153 @@ function usePost(path) {
 </a>
 
 
+Para los usuarios de TypeScript
+
+Dado que la función getPostQueryOptions no está vinculada a nada de React Query, no es completamente segura en cuanto a tipos (not type safe). Por ejemplo, si escribimos mal staleTime como staletime, TypeScript no se quejará; la propiedad en exceso simplemente será ignorada.
+
+Aquí tienes un que muestra este comportamiento.
+
+Para esta situación, React Query expone una función llamada queryOptions que restaurará la seguridad de tipos a la que estás acostumbrado:
+
+
+import { queryOptions } from '@tanstack/react-query'
+
+function getPostQueryOptions(path: string) {
+  return queryOptions({
+    queryKey: ['posts', path],
+    queryFn: () => fetchPost(path),
+    // 🚨 Esto generaría un error de compilación.
+    staletime: 5000, 
+  })
+}
+
+
+Ahora, esto generaría un error apropiadamente, como era de esperar:
+
+Object literal may only specify known properties, but 'staletime' does not exist [...]. Did you mean to write 'staleTime'?
+
+Puedes ver esto en acción en este playground (parque de juegos). https://www.typescriptlang.org/play?#code/JYWwDg9gTgLgBAbzgRwK4FMoE8DyYbAQB2AznAL5wBmUEIcA5AAIwCGpbAxgNYD0U6VpxgBaNJiwMAsAChZ6AB6RY1VEWGEicSCRgBFDNgAUYVjAAWALji6owIgHMAlIllw4AmKihbx2PATEJEYIbu4ohlgA0uhY1gDaDDowJAwANNpm5gC6aWHuflgAYkTWRi4AvAB8cAAKtCDAJOgAdAIkEAA2AG7oJllOeTLhNmyd6AQg6NYArHAAVHAAjAAMa0Pu5E6y5EA
+
+
+Y si introducimos este código en nuestra aplicación, así es como se comportaría.
+
+
+import * as React from 'react'
+import markdownit from 'markdown-it'
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { fetchPost, fetchPosts } from './api'
+
+function getPostQueryOptions(path) {
+  return {
+    queryKey: ['posts', path],
+    queryFn: () => fetchPost(path),
+    staleTime: 5000
+  }
+}
+
+function usePostList() {
+  return useQuery({
+    queryKey: ['posts'],
+    queryFn: fetchPosts,
+    staleTime: 5000
+  })
+}
+
+function usePost(path) {
+  return useQuery(getPostQueryOptions(path))
+}
+
+function PostList({ setPath }) {
+  const { status, data } = usePostList()
+  const queryClient = useQueryClient()
+
+  if (status === 'pending') {
+    return <div>...</div>
+  }
+
+  if (status === 'error') {
+    return <div>Error fetching posts</div>
+  }
+
+  return (
+    <div>
+      {data.map((post) => (
+        <p key={post.id}>
+          <a
+            onClick={() => setPath(post.path)}
+            href="#"
+            onMouseEnter={() => {
+              queryClient.prefetchQuery(getPostQueryOptions(post.path))
+            }}
+          >
+            {post.title}
+          </a>
+          <br />
+          {post.description}
+        </p>
+      ))}
+    </div>
+  )
+}
+
+function PostDetail({ path, setPath }) {
+  const { status, data } = usePost(path)
+
+  const back = (
+    <div>
+      <a onClick={() => setPath(undefined)} href="#">
+        Back
+      </a>
+    </div>
+  )
+
+  if (status === 'pending') {
+    return <div>...</div>
+  }
+  
+  if (status === 'error') {
+    return (
+      <div>
+        {back}
+        Error fetching {path}
+      </div>
+    )
+  }
+
+  const html = markdownit().render(data?.body_markdown || "")
+
+  return (
+    <div>
+      {back}
+      <h1>{data.title}</h1>
+      <div
+        dangerouslySetInnerHTML={{__html: html}}
+      />
+    </div>
+  )
+}
+
+export default function Blog() {
+  const [path, setPath] = React.useState()
+
+  return (
+    <div>
+      {path
+        ? <PostDetail path={path} setPath={setPath} />
+        : <PostList setPath={setPath} />
+      }
+    </div>
+  )
+}
+
+
+Respuesta Final
+Date cuenta de que si pasas el ratón sobre un enlace, esperas un poco y luego haces clic, no verás un indicador de carga porque los datos de esa publicación ya estarán en la caché.
+
+Puedes ver esto aún más claramente si abres las herramientas de desarrollador y luego pasas el ratón sobre un enlace. Tan pronto como lo haces, se agregará una nueva entrada a la caché.
+
+Ahora, una pregunta que podrías tener es por qué también añadimos un staleTime a nuestra consulta. Lo genial de prefetchQuery es que respeta el staleTime de la consulta que estás precargando. Esto significa que si ya hay datos frescos (fresh) en la caché, React Query simplemente ignorará la solicitud de precarga por completo.
+
+Si no tuviéramos un staleTime de 5000, cada vez que pasaras el ratón sobre el enlace se activaría una nueva solicitud, ya que el staleTime predeterminado en React Query es 0.
+
+Siguiendo la misma lógica, si solo quisieras precargar si no hay datos en la caché, podrías pasar un staleTime de Infinity.
