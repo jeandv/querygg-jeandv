@@ -390,3 +390,64 @@ Ahora, una pregunta que podrías tener es por qué también añadimos un staleTi
 Si no tuviéramos un staleTime de 5000, cada vez que pasaras el ratón sobre el enlace se activaría una nueva solicitud, ya que el staleTime predeterminado en React Query es 0.
 
 Siguiendo la misma lógica, si solo quisieras precargar si no hay datos en la caché, podrías pasar un staleTime de Infinity.
+
+
+queryClient.prefetchQuery({
+  ...getPostQueryOptions(post.path),
+  staleTime: Infinity
+})
+
+
+Ahora bien, es evidente que la precarga es una opción sólida para evitar los indicadores de carga, pero no es una solución milagrosa (silver bullet). Todavía hay una solicitud asíncrona ocurriendo, y en realidad, no tienes idea de cuánto tiempo tardará en resolverse. Es totalmente probable que, incluso con la precarga, el usuario siga viendo un indicador de carga si la respuesta es lenta.
+
+Esto nos lleva a otra optimización potencial que podemos hacer: evitar por completo los estados de carga.
+
+En nuestro ejemplo, antes de que el usuario haga clic para ir a la página de la publicación, ya tenemos algunos de los datos que necesitamos para ella. Específicamente, tenemos el id y el title de la publicación. No son todos los datos, pero puede ser suficiente para mostrar una interfaz de usuario de marcador de posición (placeholder UI) al usuario mientras esperamos que se cargue el resto de la información.
+
+Para hacer esto, React Query tiene el concepto de initialData.
+
+Si pasas initialData a useQuery, React Query utilizará los datos que esta función devuelva para inicializar la entrada de caché de esa consulta.
+
+
+useQuery({
+  queryKey,
+  queryFn,
+  initialData: () => {
+    
+  }
+})
+
+
+Así que, en lo que respecta a nuestro ejemplo, lo que necesitamos resolver es cómo obtener los datos específicos de la publicación de la caché para poder utilizarlos para inicializar nuestra consulta de la publicación.
+
+
+function usePost(path) {
+  return useQuery({
+    ...getPostQueryOptions(path),
+    initialData: () => {
+      // return cache[path]?
+    }
+  })
+}
+
+
+Una vez más, queryClient al rescate.
+
+Recuerda, el queryClient es lo que contiene la caché. Para acceder a los datos almacenados en caché directamente, puedes usar queryClient.getQueryData. Este método toma la queryKey como argumento y devolverá lo que esté en la caché para esa entrada.
+
+Así que, en nuestro ejemplo, podemos usar queryClient.getQueryData(['posts']) para obtener la lista de publicaciones, y luego usar find para obtener la publicación específica que necesitamos para inicializar la caché de la consulta de la publicación.
+
+
+function usePost(path) {
+  const queryClient = useQueryClient()
+
+  return useQuery({
+    ...getPostQueryOptions(path),
+    initialData: () => {
+      return queryClient.getQueryData(['posts'])
+        ?.find((post) => post.path === path)
+    }
+  })
+}
+
+
