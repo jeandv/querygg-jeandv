@@ -474,3 +474,5 @@ const data = queryClient.getQueryData(
 
 Échale un vistazo a este TypeScript playground: data ahora estará tipado como lo que devuelva la función fetchPosts. https://www.typescriptlang.org/play?#code/JYWwDg9gTgLgBAbzgRwK4FMoE8DyYbAQB2AzgDRwCKG2AwgDbDpHwC+cAZlBCHAOQABGAENSIgMYBrAPRR0w8TAC0aTFj4BYAFDbxxEvFV1GzeAF44RdAHcqNLAyYsAFAEpt2mFjDo4ABQgDOAskYAATAC44AyhgIgBzAG44MGEYAAsomLikuAIYenQsmFiEuFYPLTD0cXphOU5UIkVCIk50GHF0gIMSNyi-bhBgEnQAHgBBKChhLDGemAA+Rcq9MRTAmBI8An1glHsd1r6EbTgDtQBpdCwogG0+SF6+AF0yM4vsADEiKI4OroLcjaVjuHRaNZBMJpYT7IwOEwsAB08Q61DUABEYc4Pk8tkd9Ej4dcsNowdpoSJtNJpHAAHoAfiAA
 
+
+Así que ahora, si actualizamos nuestro hook usePost para incluir nuestro código de initialData, así es cómo se comportaría:
