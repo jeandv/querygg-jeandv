@@ -591,4 +591,409 @@ export default function Blog() {
 }
 
 
+Bueno, eso no funcionó. Al hacer clic en un enlace, solo vemos el título y no el contenido de la publicación. ¿Se te ocurre por qué sucede esto? Mira las herramientas de desarrollador (devtools) para obtener algunas pistas.
 
+Nuestro componente PostDetail intenta renderizar data?.body_markdown, pero cuando miramos nuestra publicación en la caché, body_markdown no existe; solo tenemos el title y el id disponibles. No es casualidad que esos sean los datos exactos que usamos para inicializar la caché.
+
+Anteriormente asumimos que al darle a React Query los datos que ya teníamos, "podría ser suficiente para mostrar una interfaz de usuario de marcador de posición (placeholder UI) al usuario mientras esperamos que se cargue el resto de los datos."
+
+Resulta que no funciona así.
+
+React Query ve los datos que colocamos en la caché a través de initialData de la misma manera que cualquier otro dato. Es decir, al establecer datos a través de initialData con un staleTime de 5000, le estamos diciendo a React Query que estos datos son válidos (fresh) durante 5 segundos y que no necesita invocar la función de consulta (queryFn) nuevamente hasta entonces.
+
+Desafortunadamente, los datos no son válidos, ya que solo tenemos una parte de ellos. Esta es una limitación obvia de establecer initialData: es una buena opción, pero solo si tienes todos los datos por adelantado (lo cual es raro).
+
+Lo que realmente estamos buscando es una manera de mostrar un placeholder adecuado mientras obtenemos los datos reales. Afortunadamente, React Query incluye otra opción diseñada a medida para este problema: placeholderData.
+
+placeholderData es similar a initialData, con la diferencia crucial de que los datos que devuelve no se guardan en la caché. Esta es una distinción sutil, pero significa que React Query sí invocará la queryFn para obtener los datos reales, y actualizará la caché cuando los tenga.
+
+Desde la perspectiva de la interfaz de usuario, esto es exactamente lo que queríamos. Podemos mostrar el título de la publicación como un marcador de posición, y luego, cuando lleguen los datos reales, actualizamos la interfaz de usuario con la publicación completa.
+
+Y si actualizamos nuestra aplicación cambiando initialData por placeholderData, así es como se comportaría:
+
+
+import * as React from 'react'
+import markdownit from 'markdown-it'
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { fetchPost, fetchPosts } from './api'
+
+function getPostQueryOptions(path) {
+  return {
+    queryKey: ['posts', path],
+    queryFn: () => fetchPost(path),
+    staleTime: 5000
+  }
+}
+
+function usePostList() {
+  return useQuery({
+    queryKey: ['posts'],
+    queryFn: fetchPosts,
+    staleTime: 5000
+  })
+}
+
+function usePost(path) {
+  const queryClient = useQueryClient()
+
+  return useQuery({
+    ...getPostQueryOptions(path),
+    placeholderData: () => {
+      return queryClient.getQueryData(['posts'])
+        ?.find((post) => post.path === path)
+    }
+  })
+}
+
+function PostList({ setPath }) {
+  const { status, data } = usePostList()
+
+  if (status === 'pending') {
+    return <div>...</div>
+  }
+
+  if (status === 'error') {
+    return <div>Error fetching posts</div>
+  }
+
+  return (
+    <div>
+      {data.map((post) => (
+        <p key={post.id}>
+          <a
+            onClick={() => setPath(post.path)}
+            href="#"
+          >
+            {post.title}
+          </a>
+          <br />
+          {post.description}
+        </p>
+      ))}
+    </div>
+  )
+}
+
+function PostDetail({ path, setPath }) {
+  const { status, data } = usePost(path)
+
+  const back = (
+    <div>
+      <a onClick={() => setPath(undefined)} href="#">
+        Back
+      </a>
+    </div>
+  )
+
+  if (status === 'pending') {
+    return <div>...</div>
+  }
+  
+  if (status === 'error') {
+    return (
+      <div>
+        {back}
+        Error fetching {path}
+      </div>
+    )
+  }
+
+  const html = markdownit().render(data?.body_markdown || "")
+
+  return (
+    <div>
+      {back}
+      <h1>{data.title}</h1>
+      <div
+        dangerouslySetInnerHTML={{__html: html}}
+      />
+    </div>
+  )
+}
+
+export default function Blog() {
+  const [path, setPath] = React.useState()
+
+  return (
+    <div>
+      {path
+        ? <PostDetail path={path} setPath={setPath} />
+        : <PostList setPath={setPath} />
+      }
+    </div>
+  )
+}
+
+
+Eso es mejor. El usuario puede ver el título al instante, y luego, cuando la solicitud en segundo plano finaliza, se muestra el resto de la publicación.
+
+Aun así, creo que puede ser mejor.
+
+Sé que hemos estado tratando de evitarlo, pero creo que mostrar un indicador de carga (junto con el título) al usuario mientras estamos obteniendo el resto de la publicación sería una buena adición a nuestra aplicación. Afortunadamente, React Query lo hace simple.
+
+Cuando invocas useQuery pasándole un placeholderData, te devolverá un booleano isPlaceholderData que será true si los datos que el usuario está viendo actualmente son placeholder data.
+
+Podemos usar esto para determinar cuándo debemos mostrar el indicador de carga.
+
+
+import * as React from 'react'
+import markdownit from 'markdown-it'
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { fetchPost, fetchPosts } from './api'
+
+function getPostQueryOptions(path) {
+  return {
+    queryKey: ['posts', path],
+    queryFn: () => fetchPost(path),
+    staleTime: 5000
+  }
+}
+
+function usePostList() {
+  return useQuery({
+    queryKey: ['posts'],
+    queryFn: fetchPosts,
+    staleTime: 5000
+  })
+}
+
+function usePost(path) {
+  const queryClient = useQueryClient()
+
+  return useQuery({
+    ...getPostQueryOptions(path),
+    placeholderData: () => {
+      return queryClient.getQueryData(['posts'])
+        ?.find((post) => post.path === path)
+    }
+  })
+}
+
+function PostList({ setPath }) {
+  const { status, data } = usePostList()
+
+  if (status === 'pending') {
+    return <div>...</div>
+  }
+
+  if (status === 'error') {
+    return <div>Error fetching posts</div>
+  }
+
+  return (
+    <div>
+      {data.map((post) => (
+        <p key={post.id}>
+          <a
+            onClick={() => setPath(post.path)}
+            href="#"
+          >
+            {post.title}
+          </a>
+          <br />
+          {post.description}
+        </p>
+      ))}
+    </div>
+  )
+}
+
+function PostDetail({ path, setPath }) {
+  const { status, data, isPlaceholderData } = usePost(path)
+
+  const back = (
+    <div>
+      <a onClick={() => setPath(undefined)} href="#">
+        Back
+      </a>
+    </div>
+  )
+
+  if (status === 'pending') {
+    return <div>...</div>
+  }
+  
+  if (status === 'error') {
+    return (
+      <div>
+        {back}
+        Error fetching {path}
+      </div>
+    )
+  }
+
+  const html = markdownit().render(data?.body_markdown || "")
+
+  return (
+    <div>
+      {back}
+      <h1>{data.title}</h1>
+      {isPlaceholderData 
+        ? <div>...</div> 
+        : <div dangerouslySetInnerHTML={{__html: html}} />}
+    </div>
+  )
+}
+
+export default function Blog() {
+  const [path, setPath] = React.useState()
+
+  return (
+    <div>
+      {path
+        ? <PostDetail path={path} setPath={setPath} />
+        : <PostList setPath={setPath} />
+      }
+    </div>
+  )
+}
+
+
+
+Mucho mejor.
+
+Y solo para unirlo todo, volvamos a añadir nuestra lógica de precarga (prefetching). Así, si la solicitud es lo suficientemente rápida, el usuario verá la entrada real de inmediato, pero si no lo es, verá el título con el indicador de carga hasta que la información se resuelva.
+
+
+import * as React from 'react'
+import markdownit from 'markdown-it'
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { fetchPost, fetchPosts } from './api'
+
+function getPostQueryOptions(path) {
+  return {
+    queryKey: ['posts', path],
+    queryFn: () => fetchPost(path),
+    staleTime: 5000
+  }
+}
+
+function usePostList() {
+  return useQuery({
+    queryKey: ['posts'],
+    queryFn: fetchPosts,
+    staleTime: 5000
+  })
+}
+
+function usePost(path) {
+  const queryClient = useQueryClient()
+
+  return useQuery({
+    ...getPostQueryOptions(path),
+    placeholderData: () => {
+      return queryClient.getQueryData(['posts'])
+        ?.find((post) => post.path === path)
+    }
+  })
+}
+
+function PostList({ setPath }) {
+  const { status, data } = usePostList()
+  const queryClient = useQueryClient()
+
+  if (status === 'pending') {
+    return <div>...</div>
+  }
+
+  if (status === 'error') {
+    return <div>Error fetching posts</div>
+  }
+
+  return (
+    <div>
+      {data.map((post) => (
+        <p key={post.id}>
+          <a
+            onClick={() => setPath(post.path)}
+            href="#"
+            onMouseEnter={() => {
+              queryClient.prefetchQuery(getPostQueryOptions(post.path))
+            }}
+          >
+            {post.title}
+          </a>
+          <br />
+          {post.description}
+        </p>
+      ))}
+    </div>
+  )
+}
+
+function PostDetail({ path, setPath }) {
+  const { status, data, isPlaceholderData } = usePost(path)
+
+  const back = (
+    <div>
+      <a onClick={() => setPath(undefined)} href="#">
+        Back
+      </a>
+    </div>
+  )
+
+  if (status === 'pending') {
+    return <div>...</div>
+  }
+  
+  if (status === 'error') {
+    return (
+      <div>
+        {back}
+        Error fetching {path}
+      </div>
+    )
+  }
+
+  const html = markdownit().render(data?.body_markdown || "")
+
+  return (
+    <div>
+      {back}
+      <h1>{data.title}</h1>
+      {isPlaceholderData 
+        ? <div>...</div> 
+        : <div dangerouslySetInnerHTML={{__html: html}} />}
+    </div>
+  )
+}
+
+export default function Blog() {
+  const [path, setPath] = React.useState()
+
+  return (
+    <div>
+      {path
+        ? <PostDetail path={path} setPath={setPath} />
+        : <PostList setPath={setPath} />
+      }
+    </div>
+  )
+}
+
+
+For TypeScript Users
+Both initialData and placeholderData need to conform to the same type that the queryFn returns. If you want placeholderData to be a "partial" of that data, you need to define your type in a way to adhere to that.
+
+Show More
+As an example, for what we're rendering in the app above, the type of a detail post would have to be:
+
+type PostDetail = {
+  id: string,
+  title: string,
+  body_markdown?: string
+}
+Note how body_markdown has to be defined as optional, because the list Query doesn't have it, and we're adding what the list query returns as placeholderData. If we would want body_markdown to always be present on type level, we'd have to add it as an empty string when writing our placeholderData:
+
+placeholderData: () => {
+  const post = queryClient
+    .getQueryData(['posts'])
+    ?.find((post) => post.path === path)
+  
+  return post
+    ? { ...post, body_markdown: '' }
+    : undefined
+}
+Note that this wouldn't change what we're rendering because our UI would still show the loading indicator while we have placeholderData, it's just necessary to appease the TypeScript gods.
+
+It's also good to know that using placeholderData can be "more type-safe" than assigning a default value during object destruction. For more details, have a look at this TypeScript playground.
