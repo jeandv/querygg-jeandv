@@ -21,21 +21,27 @@ const authors = [
   "J.K. Rowling",
   "C.S. Lewis",
   "J.R.R Tolkien",
-  "George R.R. Martin"
+  "George R.R. Martin",
 ];
 
+const getBooksByAuthorQueryOptions = (author) => ({
+  queryKey: ["books", { author }],
+  queryFn: () => getBooksByAuthor(author),
+  staleTime: Infinity,
+});
+
+const getBookQueryOptions = (bookId) => ({
+  queryKey: ["books", { bookId }],
+  queryFn: () => getBook(bookId),
+  staleTime: Infinity,
+});
+
 function useBook(bookId) {
-  return useQuery({
-    queryKey: ["books", { bookId }],
-    queryFn: () => getBook(bookId)
-  });
+  return useQuery(getBookQueryOptions(bookId));
 }
 
 function useBooksByAuthor(author) {
-  return useQuery({
-    queryKey: ["books", { author }],
-    queryFn: () => getBooksByAuthor(author)
-  });
+  return useQuery(getBooksByAuthorQueryOptions(author));
 }
 
 function BookListItem({
@@ -44,10 +50,28 @@ function BookListItem({
   thumbnail,
   title,
   authors,
-  averageRating
+  averageRating,
+  selectedAuthor,
 }) {
+  const queryClient = useQueryClient();
+
   const handleClick = (e) => {
     e.preventDefault();
+
+    const authorListKey = getBooksByAuthorQueryOptions(selectedAuthor).queryKey;
+
+    const bookList = queryClient.getQueryData(authorListKey);
+
+    if (bookList) {
+      const bookData = bookList.find((book) => book.id === bookId);
+
+      if (bookData) {
+        const bookDetailKey = getBookQueryOptions(bookId).queryKey;
+
+        queryClient.setQueryData(bookDetailKey, bookData);
+      }
+    }
+
     setBookId(bookId);
   };
 
@@ -67,11 +91,12 @@ function BookListItem({
   );
 }
 
-function AuthorTab({ isActive, author, setSelectedAuthor }) {
+function AuthorTab({ isActive, author, setSelectedAuthor, onMouseEnter }) {
   return (
     <button
       className={`category ${isActive ? "active" : ""}`}
       onClick={() => setSelectedAuthor(author)}
+      onMouseEnter={onMouseEnter}
     >
       {author}
     </button>
@@ -79,6 +104,8 @@ function AuthorTab({ isActive, author, setSelectedAuthor }) {
 }
 
 function PopularAuthorTabs({ authors, selectedAuthor, setSelectedAuthor }) {
+  const queryClient = useQueryClient();
+
   return (
     <div className="category-list-container">
       <div className="category-list">
@@ -88,6 +115,9 @@ function PopularAuthorTabs({ authors, selectedAuthor, setSelectedAuthor }) {
             author={author}
             isActive={author === selectedAuthor}
             setSelectedAuthor={setSelectedAuthor}
+            onMouseEnter={() => {
+              queryClient.prefetchQuery(getBooksByAuthorQueryOptions(author));
+            }}
           />
         ))}
       </div>
@@ -126,6 +156,7 @@ function BookListView({ setBookId, selectedAuthor, setSelectedAuthor }) {
                 averageRating={book.averageRating}
                 authors={book.authors}
                 setBookId={setBookId}
+                selectedAuthor={selectedAuthor}
               />
             ))}
           </ul>
