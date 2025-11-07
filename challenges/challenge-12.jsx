@@ -8,6 +8,7 @@
 //   "The Lord of the Rings", // el término de búsqueda
 //   1 // número de página
 // );
+
 // Finalmente, para que la experiencia de paginación se sienta más rápida (y para evitar mostrar spinners), debes mostrar los datos de la página anterior mientras se están cargando los datos de la página siguiente.
 
 // Nota: La paginación de esta API comienza en 1, no en 0.
