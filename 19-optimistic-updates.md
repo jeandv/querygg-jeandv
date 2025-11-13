@@ -863,9 +863,10 @@ Dado que escribir actualizaciones optimistas en la caché implica bastante códi
    ),
    invalidates: ['todos', 'list'],
  })
+
+
 Aquí tienes un ejemplo de cómo se vería ese código:
 
-JavaScript
 
 export const useOptimisticMutation = ({ mutationFn, queryKey, updater, invalidates }) => {
   const queryClient = useQueryClient()
