@@ -11,3 +11,5 @@ Aunque generalmente es una buena idea encontrar formas de hacer que los componen
 Afortunadamente, React en sí mismo nos ofrece algunas opciones para resolver estos problemas — y para asegurarnos de que estamos en sintonía, hagamos un repaso rápido de algunos fundamentos de renderizado de React.
 
 Cuando se trata de renderizado, la forma en que funciona React es que cada vez que cambia el estado, volverá a renderizar el componente que posee ese estado y todos sus componentes hijos, independientemente de si esos componentes hijos aceptan o no alguna prop (propiedad).
+
+Podemos ver esto en acción con esta aplicación básica. Observa que cada vez que haces clic en el botón, aunque el componente Wave no dependa de ninguna prop, aún se vuelve a renderizar (re-renderiza).
