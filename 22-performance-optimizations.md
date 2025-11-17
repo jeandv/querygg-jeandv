@@ -345,3 +345,6 @@ export default function App() {
 }
 
 
+Observa que a pesar de que nuestra queryFn se ejecuta cada vez que invocamos manualmente refetch, debido a que los datos no han cambiado, el Observador es lo suficientemente inteligente como para saber que el componente no necesita volverse a renderizar.
+
+Podemos ver esto representado en estas dos imágenes: la primera donde los datos no han cambiado y la segunda donde sí lo han hecho.
