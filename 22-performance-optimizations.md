@@ -363,3 +363,260 @@ queryFn: () => {
 }
 
 
+¿Es lo suficientemente inteligente como para saber que el componente no necesita volver a renderizarse ya que no usa la propiedad updatedAt?
+
+Pruébalo.
+
+
+import { useQuery } from '@tanstack/react-query'
+
+export default function App() {
+  const { data, refetch } = useQuery({
+    queryKey: ['user'],
+    queryFn: () => {
+      console.log('queryFn runs')
+      return Promise.resolve({
+        name: 'Dominik',
+        updatedAt: Date.now()
+      })
+    }
+  })
+
+  console.log('render')
+
+  return (
+    <div>
+      <button onClick={() => refetch()}>
+        refresh
+      </button>
+      <p>
+        {data?.name}
+      </p>
+    </div>
+  )
+}
+
+
+Aunque el Observador es lo suficientemente inteligente como para saber que no necesita volver a renderizar el componente cuando sus datos no cambian, no es lo suficientemente inteligente como para saber qué datos utiliza realmente el componente.
+
+Afortunadamente, con un poco de nuestra ayuda, podemos hacer que el Observador sea un poco más inteligente.
+
+Si tu queryFn devuelve datos extra que no son necesarios en el componente, puedes usar la opción select para filtrar los datos que el componente no necesita y, por lo tanto, suscribirse a un subconjunto de los datos y solo volver a renderizar el componente cuando sea necesario.
+
+Funciona aceptando los datos devueltos de la queryFn, y el valor que devuelve será pasado al componente.
+
+
+const { data, refetch } = useQuery({
+  queryKey: ['user'],
+  queryFn: () => {
+    console.log('queryFn runs')
+    return Promise.resolve({
+      name: 'Dominik',
+      updatedAt: Date.now()
+    })
+  },
+  select: (data) => ({ name: data.name })
+})
+
+
+Ahora, si lo incorporamos a nuestra aplicación, fíjate en cómo se comporta.
+
+
+import { useQuery } from '@tanstack/react-query'
+
+export default function App() {
+  const { data, refetch } = useQuery({
+    queryKey: ['user'],
+    queryFn: () => {
+      console.log('queryFn runs')
+      return Promise.resolve({
+        name: 'Dominik',
+        updatedAt: Date.now()
+      })
+    },
+    select: (data) => ({ name: data.name })
+  })
+
+  console.log('render')
+
+  return (
+    <div>
+      <button onClick={() => refetch()}>
+        refresh
+      </button>
+      <p>
+        {data?.name}
+      </p>
+    </div>
+  )
+}
+
+
+A pesar de que la propiedad updatedAt cambia cada vez que se ejecuta la queryFn, el componente ya no se vuelve a renderizar puesto que hemos filtrado ese valor utilizando select.
+
+Una vez más, todo esto funciona porque el Observador está desacoplado del componente y, por lo tanto, puede tomar decisiones de renderizado de alto nivel.
+
+Y quizás también hayas notado que la igualdad referencial es irrelevante para select. Como le concierne a React Query, lo que importa es el contenido de los datos, no su referencia.
+
+
+- Para Usuarios de TypeScript:
+
+El tipo de data se deriva de lo que devuelve la función select. En nuestro ejemplo anterior:
+
+Lo que devuelve la queryFn será un objeto con el tipo:
+
+
+type Data = { name: string, updatedAt: number }
+
+Después de la transformación con select, si desestructuramos los datos de useQuery, serán solamente del tipo:
+
+
+{ name: string }
+
+
+Esto asegura que el componente solo conoce y está tipado para la parte de los datos que realmente necesita, manteniendo la seguridad de tipos y la granularidad.
+
+
+Y si la transformación en select resultara ser prohibitivamente costosa, siempre podrías memoizarla con useCallback para que se ejecute solo cuando sea necesario.
+
+
+select: React.useCallback(
+  expensiveTransformation, 
+  []
+)
+
+
+Por lo tanto, a estas alturas está claro que, en lo que respecta a los datos, React Query intenta ser lo más eficiente posible manteniendo su referencia estable cuando es posible y solo volviendo a renderizar los componentes cuando es necesario a través del Observador.
+
+Sin embargo, cuando invocas useQuery, no solo recibes los data, sino un objeto completo que representa todo sobre la query en sí, incluyendo el status, fetchStatus, error, etc.
+
+A pesar de los beneficios de rendimiento de cómo React Query maneja los data, todo sería inútil si un componente tuviera que volver a renderizarse cada vez que cualquiera de las propiedades del objeto Query cambiara.
+
+Y para empeorar las cosas, como has visto, propiedades como fetchStatus cambian a menudo, ya que React Query siempre está haciendo refetches en segundo plano para asegurar que los datos estén actualizados.
+
+Entonces, ¿cómo resolvemos esto? Con una característica realmente interesante que llamamos Propiedades Rastreadas (Tracked Properties).
+
+Cuando React Query crea el objeto de resultado devuelto por useQuery, lo hace con accesores (getters) personalizados.
+
+https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/defineProperty#custom_setters_and_getters
+
+¿Por qué es esto importante? Porque permite al Observador entender y hacer un seguimiento de qué campos han sido accedidos en la función de renderizado y, al hacerlo, solo volver a renderizar el componente cuando esos campos realmente cambian.
+
+Por ejemplo, si un componente no usa fetchStatus, no tiene sentido que ese componente se vuelva a renderizar solo porque el fetchStatus cambie de idle a fetching y viceversa. Son las Propiedades Rastreadas las que hacen esto posible y aseguran que los componentes estén siempre actualizados, mientras mantienen su recuento de renders al mínimo necesario.
+
+- Solo asegúrate de que...
+
+Cuando invoques useQuery, querrás hacerlo sin usar el operador rest (...).
+
+Por ejemplo, esto está bien:
+
+
+const { data, error } = useQuery({ queryKey, queryFn })
+
+
+y esto también está bien:
+
+
+const result = useQuery({ queryKey, queryFn })
+
+result.data
+result['error']
+
+
+Pero esto es una mala idea:
+
+
+const { data, ...rest } = useQuery({ queryKey, queryFn })
+
+
+La razón es que si usas el operador rest (...), React Query tendrá que invocar todos los getters personalizados (Propiedades Rastreadas), anulando cualquiera de los beneficios de rendimiento que obtendrías al no volver a renderizar cuando no es necesario.
+
+Para mayor seguridad, el plugin de ESLint de Query también tiene una regla para verificar estos escenarios.
+
+https://tanstack.com/query/v5/docs/react/eslint/no-rest-destructuring
+
+
+A estas alturas, hemos cubierto diferentes optimizaciones de renderizado que React Query realiza internamente y algunas que puedes hacer tú mismo (como select). Sin embargo, no solo se puede optimizar el renderizado, sino también las peticiones de datos (fetches).
+
+En un mundo ideal, cada usuario tendría Internet rápido e ilimitado. Como sabes, vivimos en un mundo oscuro, cruel e implacable y no siempre es así.
+
+Afortunadamente, como has visto, React Query hace un trabajo bastante decente de forma predeterminada para adaptarse a todo tipo de conexiones.
+
+Una forma es que, en lugar de obtener y refetchear datos constantemente, React Query solo vuelve a obtener datos obsoletos (stale) basándose en señales del usuario. Por supuesto, puedes ajustar esto configurando staleTime, pero eso no siempre es suficiente.
+
+Por ejemplo, supón que tienes una aplicación con un campo de entrada de búsqueda no debounced que obtiene algunos datos. Cada pulsación de tecla crearía una query nueva, disparando múltiples solicitudes en rápida sucesión. No hay nada que puedas hacer con staleTime para solucionar eso.
+
+Y podría sorprenderte saber que, por defecto, React Query dejará que todas esas queries se resuelvan, a pesar de que es probable que solo te interese la última respuesta.
+
+La ventaja de este enfoque es que llenará la caché con datos que potencialmente podrías necesitar más tarde. La desventaja, por supuesto, es el desperdicio de recursos, tanto en el cliente como en el servidor.
+
+Depende de ti decidir si te gusta ese comportamiento, pero si no, React Query te da la opción de desactivarlo con la ayuda de la API de Abort Controller.
+
+https://developer.mozilla.org/en-US/docs/Web/API/AbortController
+
+Así es como funciona:
+
+Cuando React Query invoca una queryFn, le pasará una signal como parte del QueryFunctionContext. Esta signal se origina en un AbortController (que React Query creará) y, si se la pasas a tu solicitud fetch, React Query podrá cancelar la solicitud si la Query deja de usarse.
+
+
+function useIssues(search) {
+  return useQuery({
+    queryKey: ['issues', search],
+    queryFn: ({ signal }) => {
+      const searchParams = new URLSearchParams()
+      searchParams.append('q', `${search} is:issue repo:TanStack/query`)
+
+      const url = `https://api.github.com/search/issues?${searchParams}`
+
+      const response = await fetch(url, { signal })
+
+      if (!response.ok) {
+        throw new Error('fetch failed')
+      }
+
+      return response.json()
+    }
+  })
+}
+
+
+Y si añadimos esto a una aplicación, puedes ver que todas las entradas de la query son creadas, todas las solicitudes se disparan inmediatamente, pero solo la última se colocará en la caché, y todas las demás serán canceladas.
+
+
+import { useQuery } from '@tanstack/react-query'
+import { fetchIssues } from './api'
+
+function useIssues(search) {
+  return useQuery({
+    queryKey: ['issues', search],
+    queryFn: ({ signal }) => fetchIssues(search, signal),
+    staleTime: 1 * 60 * 1000,
+  })
+}
+
+export function IssueList({ search }) {
+  const { data, status, fetchStatus } = useIssues(search)
+  if (status === 'pending') {
+    return <div>...</div>
+  }
+
+  if (status === 'error') {
+    return <div>Error fetching data 😔</div>
+  }
+
+  if (data.items.length === 0) {
+    return <div>No results found</div>
+  }
+
+  return (
+    <div>
+      <ul>
+        { data.items.map(issue => <li key={issue.id}>{issue.title}</li>) }
+      </ul>
+      <div>{ fetchStatus === 'fetching' ? 'updating...' : null }</div>
+    </div>
+  )
+}
+
+
+Independientemente de la técnica de optimización que utilices, es importante comprender que tienes opciones cuando las necesitas.
