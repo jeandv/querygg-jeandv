@@ -348,3 +348,18 @@ export default function App() {
 Observa que a pesar de que nuestra queryFn se ejecuta cada vez que invocamos manualmente refetch, debido a que los datos no han cambiado, el Observador es lo suficientemente inteligente como para saber que el componente no necesita volverse a renderizar.
 
 Podemos ver esto representado en estas dos imágenes: la primera donde los datos no han cambiado y la segunda donde sí lo han hecho.
+
+Ahora, aquí tienes una pregunta en la que quiero que reflexiones. ¿Qué crees que sucederá si añadimos una nueva propiedad al objeto que devuelve la queryFn, pero esta propiedad 1) cambia cada vez que se invoca queryFn, pero 2) no es utilizada por el componente?
+
+En cierto sentido, te estoy preguntando qué tan inteligente crees que es realmente el Observador.
+
+
+queryFn: () => {
+  console.log('queryFn runs')
+  return Promise.resolve({
+    name: 'Dominik',
+    updatedAt: Date.now()
+  })
+}
+
+
