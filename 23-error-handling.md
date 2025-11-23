@@ -26,3 +26,4 @@ function useRepos() {
 }
 
 
+Ahora puede llegar un momento en el que necesites depurar o envolver la respuesta de tu solicitud fetch dentro de tu queryFn. Para hacer esto, podrías sentir la tentación de manejar el error manualmente con catch.
