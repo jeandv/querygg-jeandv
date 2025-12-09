@@ -461,3 +461,275 @@ const persister = createSyncStoragePersister({
 
 Independientemente de la estrategia retry que elijas, siempre es una buena idea manejar estos puntos de fallo para asegurar que tu aplicación continúe funcionando como se espera.
 
+
+Así, llegados a este punto, ya has visto cómo React Query intentará restaurar la caché desde el almacenamiento persistente cuando la aplicación se carga. Sin embargo, este proceso no es instantáneo, especialmente cuando se utiliza una API de almacenamiento asíncrona. E incluso si es síncrono, leer desde cualquier almacenamiento persistente es un efecto secundario, lo que ocurre fuera del flujo de renderizado de React.
+
+Lo que esto significa desde un punto de vista práctico es que en el renderizado inicial, los datos del almacén aún no se habrán restaurado y colocado en la caché. En este escenario, ¿qué debería hacer React Query?
+
+Si tomara inspiración de otras librerías de persistencia, como redux-persist, resolvería este problema dándote un componente <PersistGate> que puedes usar para retrasar el renderizado hasta que este proceso de restauración haya finalizado. La desventaja, por supuesto, es que si retrasas el renderizado, obtendrás un desajuste entre el servidor y el cliente (server/client mismatch) en entornos de renderizado del lado del servidor (SSR), lo cual es menos que ideal.
+
+En su lugar, React Query simplemente renderizará tu Aplicación como de costumbre, pero no ejecutará ninguna query hasta que los datos hayan sido restaurados desde el almacenamiento persistente. Mientras esto sucede, el status de la query será pending y el fetchStatus será idle (asumiendo que no estás usando algo como initialData o placeholderData).
+
+Una vez que los datos han sido restaurados, las queries continuarán ejecutándose con normalidad y, si los datos se consideran obsoletos (stale), también verás una re-obtención en segundo plano (background refetch).
+
+
+Por supuesto, si tu aplicación no se está ejecutando en un entorno del lado del servidor como Next o Remix y prefieres simplemente retrasar el renderizado hasta que el proceso de restauración haya finalizado, puedes escribir fácilmente tu propio componente PersistGate usando el hook useIsRestoring que proporciona React Query.
+
+
+import { useIsRestoring } from '@tanstack/react-query'
+
+export function PersistGate({ children, fallback = null }) {
+  const isRestoring = useIsRestoring()
+
+  return isRestoring ? fallback : children
+}
+
+
+useIsRestoring comenzará devolviendo true cuando se utilice el PersistQueryClientProvider, y cambiará a false tan pronto como los datos hayan sido restaurados.
+
+En uso, se ve así, donde Blog solo se renderizará una vez que el proceso de restauración haya finalizado.
+
+
+<PersistQueryClientProvider
+  client={queryClient}
+  persistOptions={{ persister }}
+>
+  <PersistGate fallback="...">
+    <Blog />
+  </PersistGate>
+</PersistQueryClientProvider>
+
+
+🐉 Experimental, LOL:
+
+Advertencia: Ten en cuenta que la API de React Query de la que estamos a punto de hablar es experimental, lo que significa que la API puede cambiar en cualquier momento. Úsala bajo tu propia responsabilidad.
+
+Como vimos anteriormente, el inconveniente de PersistQueryClientProvider es que generalmente es un provider global y afectará a todas las queries ubicadas en su subárbol de children. Esto está bien, hasta que deja de estarlo.
+
+Resolvimos esto utilizando una combinación de meta y dehydrateOptions para tener más control sobre qué se persiste.
+
+
+<PersistQueryClientProvider
+  client={queryClient}
+  persistOptions={{
+    persister,
+    dehydrateOptions: {
+      shouldDehydrateQuery: (query) => {
+        return defaultShouldDehydrateQuery(query) 
+          && query.meta.persist === true
+      }
+    },
+  }}
+>
+
+
+Afortunadamente, con la API experimental createPersister de React Query, ahora puedes declarar un persister por query en lugar de en todo el QueryClient.
+
+Así es como se ve:
+
+
+import { useQuery } from '@tanstack/react-query'
+import { experimental_createPersister } from '@tanstack/react-query-persist-client'
+
+function usePostList() {
+  return useQuery({
+    queryKey: ['posts'],
+    queryFn: fetchPosts,
+    staleTime: 5 * 1000,
+    // El persister se declara directamente en la query
+    persister: experimental_createPersister({
+      storage: localStorage,
+    }),
+  })
+}
+
+
+La mejor parte es que al hacer esto a menudo eliminarás la necesidad de usar meta, dehydrateOptions y PersistQueryClientProvider por completo, ya que ahora puedes declarar el persister directamente en la query misma.
+
+Así es como se ve en nuestra aplicación; de nuevo, observa que App.js vuelve a usar QueryClientProvider y PersistQueryClientProvider ya no es necesario.
+
+
+Blog.jsx:
+import * as React from 'react'
+import markdownit from 'markdown-it'
+import { useQuery } from '@tanstack/react-query'
+import { experimental_createPersister } from '@tanstack/react-query-persist-client'
+import { fetchPost, fetchPosts } from './api'
+
+function usePostList() {
+  return useQuery({
+    queryKey: ['posts'],
+    queryFn: fetchPosts,
+    staleTime: 5000,
+    persister: experimental_createPersister({
+      storage: localStorage,
+    }),
+  })
+}
+
+function usePost(path) {
+  return useQuery({
+    queryKey: ['posts', path],
+    queryFn: () => fetchPost(path),
+    staleTime: 5000,
+    persister: experimental_createPersister({
+      storage: localStorage,
+    }),
+  })
+}
+
+function PostList({ setPath }) {
+  const { status, data } = usePostList()
+
+  if (status === 'pending') {
+    return <div>...</div>
+  }
+
+  if (status === 'error') {
+    return <div>Error fetching posts</div>
+  }
+
+  return (
+    <div>
+      {data.map((post) => (
+        <p key={post.id}>
+          <a
+            onClick={() => setPath(post.path)}
+            href="#"
+          >
+            {post.title}
+          </a>
+          <br />
+          {post.description}
+        </p>
+      ))}
+    </div>
+  )
+}
+
+function PostDetail({ path, setPath }) {
+  const { status, data } = usePost(path)
+
+  const back = (
+    <div>
+      <a onClick={() => setPath(undefined)} href="#">
+        Back
+      </a>
+    </div>
+  )
+
+  if (status === 'pending') {
+    return <div>...</div>
+  }
+  
+  if (status === 'error') {
+    return (
+      <div>
+        {back}
+        Error fetching {path}
+      </div>
+    )
+  }
+
+  const html = markdownit().render(data?.body_markdown || "")
+
+  return (
+    <div>
+      {back}
+      <h1>{data.title}</h1>
+      <div
+        dangerouslySetInnerHTML={{__html: html}}
+      />
+    </div>
+  )
+}
+
+export default function Blog() {
+  const [path, setPath] = React.useState()
+
+  return (
+    <div>
+      {path
+        ? <PostDetail path={path} setPath={setPath} />
+        : <PostList setPath={setPath} />
+      }
+    </div>
+  )
+}
+
+
+App.jsx:
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import Blog from './Blog'
+
+const queryClient = new QueryClient()
+
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <Blog />
+    </QueryClientProvider>
+  )
+}
+
+
+Ahora, lo creas o no, no solo las queries pueden ser persistidas, sino también las mutaciones. Hay que admitir que este caso de uso es bastante raro, pero merece una mención rápida.
+
+Aquí hay un escenario que quiero que analices.
+
+Tienes una aplicación de lectura/escritura que permite a los usuarios crear, actualizar y eliminar datos.
+
+Uno de tus usuarios, un escritor, está trabajando en un artículo largo. Realiza la mayor parte de su escritura en un tren sin conectividad a internet. Ha estado escribiendo durante horas y está casi terminando cuando la batería de su portátil se agota.
+
+Como desarrollador de esta aplicación, ¿cómo manejarías esta situación?
+
+Ya discutimos cómo manejar el aspecto sin conexión de este problema, pero la muerte de la batería es una bestia diferente. Hay una posibilidad de que la pestaña de su navegador se conserve, pero lo más probable es que cualquier estado que estuviera en la caché de React Query se pierda cuando la batería muera. Entonces, ¿cómo resolvemos esto?
+
+Persistencia de Mutaciones
+Acabamos de ver que al envolver tu aplicación dentro de PersistQueryClientProvider y darle un persister, React Query persistirá todas las queries en el almacenamiento externo proporcionado. Lo que no vimos es que PersistQueryClientProvider también persiste todas las mutaciones en el almacenamiento externo.
+
+Esto significa que, mientras está offline, si el usuario guarda su trabajo, esa mutación se persistirá en el almacenamiento externo y podrá restaurarse incluso si cierran su pestaña del navegador o si la batería se agota antes de que se vuelvan a conectar.
+
+Todo lo que queda por hacer es restaurar realmente las mutaciones cuando el usuario vuelva a visitar la aplicación.
+
+1. Establecer una Función de Mutación por Defecto
+
+Para hacer eso, primero querrás darle a tu QueryClient una función de mutación por defecto.
+
+
+queryClient.setMutationDefaults(['posts'], {
+  mutationFn: addPost
+})
+
+
+Recuerda, el proceso de restauración tendrá lugar inmediatamente antes de que se renderice la aplicación. Sin esta función por defecto, React Query tendría que renderizar la aplicación y encontrar la invocación de useMutation para la clave asociada con el fin de obtener la mutationFn. Al establecer una función de mutación por defecto por adelantado, React Query puede restaurar inmediatamente la mutación tan pronto como la aplicación se carga.
+
+2. Reanudar las Mutaciones Pausadas
+
+A partir de ahí, todo lo que tienes que hacer es, una vez que el usuario vuelve a visitar la aplicación y el proceso de restauración desde el almacén externo ha finalizado, indicarle a React Query que reanude cualquier mutación que haya ocurrido mientras estuvieron ausentes.
+
+Afortunadamente, React Query lo hace bastante simple. Si pasamos un prop onSuccess a PersistQueryClientProvider, React Query invocará esa función cuando el proceso de restauración haya finalizado.
+
+
+<PersistQueryClientProvider
+  client={queryClient}
+  persistOptions={{ persister }}
+  onSuccess={() => {
+
+  }}
+>
+
+
+Luego, al invocar queryClient.resumePausedMutations dentro de onSuccess, React Query reanudará todas las mutaciones pausadas en el orden en que fueron llamadas originalmente.
+
+
+<PersistQueryClientProvider
+  client={queryClient}
+  persistOptions={{ persister }}
+  onSuccess={() => {
+    return queryClient.resumePausedMutations()
+  }}
+>
+
+
+Como beneficio adicional, debido a que resumePausedMutations devuelve una promesa, podemos devolver esa promesa desde onSuccess para asegurar que nuestras queries permanezcan en un estado pending hasta que el proceso de restauración haya finalizado.
